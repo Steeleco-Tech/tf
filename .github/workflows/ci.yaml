@@ -1,0 +1,84 @@
+#name: CI
+#
+#on:
+#  pull_request:
+#    branches: [main]
+#  push:
+#    branches: [main]
+#
+#concurrency:
+#  group: ${{ github.workflow }}-${{ github.ref }}
+#  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+#
+#jobs:
+#  plan:
+#    name: Plan
+#    runs-on: ubuntu-latest
+#    if: github.event_name == 'pull_request'
+#    steps:
+#      - name: Checkout repo
+#        uses: actions/checkout@v3
+#      - name: Download state file
+#        run: ./.github/scripts/get-state-file.sh
+#        env:
+#          TFSTATE_GPG_KEY=${{ secrets.TFSTATE_GPG_KEY }}
+#      - name: Terraform Plan
+#        run: terraform plan
+#      - name: Terraform Apply
+#        run: terraform apply -auto-approve
+
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request: {}
+jobs:
+  plan:
+    name: TF Plan
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+      - name: Generate app token
+        id: generate-app-token
+        uses: tibdex/github-app-token@v1.9.0
+        with:
+          app_id: ${{ vars.GH_APP_STEELECO_SYSTEMS_APP_ID }}
+          private_key: ${{ secrets.GH_APP_STEELECO_SYSTEMS_PRIVATE_KEY }}
+      - name: Download and decrypt statefile
+        env:
+          TFSTATE_PGP_KEY: ${{ secrets.TFSTATE_PGP_KEY }}
+        run: |
+          # step script
+          set -x
+          ./.github/scripts/get-state-file.sh
+      - name: Terraform plan
+        run: |
+          tf init
+          tf plan | tee >(ansi2txt > terraform.tfplan.log)
+      - uses: actions/upload-artifact@v3
+        with:
+          name: terraform.tfplan.log
+          path: terraform.tfplan.log
+
+  apply:
+    name: TF Apply
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+      - name: Generate app token
+        id: generate-app-token
+        uses: tibdex/github-app-token@v1.9.0
+        with:
+          app_id: ${{ vars.GH_APP_STEELECO_SYSTEMS_APP_ID }}
+          private_key: ${{ secrets.GH_APP_STEELECO_SYSTEMS_PRIVATE_KEY }}
+      - name: Terraform apply
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-app-token.outputs.token }}
+        run: terraform apply -auto-approve
+
+
+
