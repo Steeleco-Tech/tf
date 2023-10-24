@@ -48,7 +48,8 @@ jobs:
           private_key: ${{ secrets.GH_APP_STEELECO_SYSTEMS_PRIVATE_KEY }}
       - name: Download and decrypt statefile
         env:
-          GITHUB_TOKEN: ${{ steps.generate-app-token.outputs.token }}
+          #GITHUB_TOKEN: ${{ steps.generate-app-token.outputs.token }}
+          GITHUB_TOKEN: ${{ secrets.token }}
           TFSTATE_PGP_KEY: ${{ secrets.TFSTATE_PGP_KEY }}
         run: |
           # step script
