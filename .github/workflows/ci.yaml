@@ -49,7 +49,7 @@ jobs:
       - name: Download and decrypt statefile
         env:
           #GITHUB_TOKEN: ${{ steps.generate-app-token.outputs.token }}
-          GH_TOKEN: ${{ secrets.token }}
+          GITHUB_TOKEN: ${{ github.token }}
           TFSTATE_PGP_KEY: ${{ secrets.TFSTATE_PGP_KEY }}
         run: |
           # step script
