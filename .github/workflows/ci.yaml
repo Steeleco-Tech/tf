@@ -115,8 +115,10 @@ jobs:
         run: |
           # step script
           set -x
-          gpg --encrypt --output terraform.tfstate.gpg < terraform.tfstate
-          gpg --encrypt --output terraform.tfstate.backup.gpg < terraform.tfstate.backup
+          gpg --batch --encrypt --default-recipient "141457414+steeleco-systems[bot]@users.noreply.github.com" \
+            --output terraform.tfstate.gpg terraform.tfstate
+          gpg --batch --encrypt --default-recipient "141457414+steeleco-systems[bot]@users.noreply.github.com" \
+            --output terraform.tfstate.backup.gpg terraform.tfstate.backup
       - name: Create release body
         run: |
           cat \
