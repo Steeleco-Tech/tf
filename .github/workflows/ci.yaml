@@ -110,15 +110,13 @@ jobs:
       - name: Terraform apply
         env:
           GITHUB_TOKEN: ${{ steps.generate-app-token.outputs.token }}
-        run: terraform appy -auto-approve | tee >(ansi2txt > terraform.apply.log)
+        run: terraform apply -auto-approve | tee >(ansi2txt > terraform.apply.log)
       - name: Encrypt statefile
         run: |
           # step script
           set -x
-          gpg --encrypt --default-recipient "141457414+steeleco-systems[bot]@users.noreply.github.com" \
-            --output terraform.tfstate.gpg terraform.tfstate
-          gpg --encrypt --default-recipient "141457414+steeleco-systems[bot]@users.noreply.github.com" \
-            --output terraform.tfstate.backup.gpg terraform.tfstate.backup
+          gpg --encrypt --output terraform.tfstate.gpg < terraform.tfstate
+          gpg --encrypt --output terraform.tfstate.backup.gpg < terraform.tfstate.backup
       - name: Create release body
         run: |
           cat \
