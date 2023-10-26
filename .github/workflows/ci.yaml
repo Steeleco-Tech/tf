@@ -1,0 +1,156 @@
+name: CI
+on:
+#  push:
+#    branches: [main]
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - closed
+concurrency:
+  group: ${{ github.workflow}}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+permissions:
+  contents: write
+jobs:
+  plan:
+    name: TF Plan
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dependencies
+        run: sudo apt-get install -y colorized-logs
+      - name: Checkout repo
+        uses: actions/checkout@v3
+#      - name: Generate app token
+#        id: generate-app-token
+#        uses: tibdex/github-app-token@v1.9.0
+#        with:
+#          app_id: ${{ vars.GH_APP_STEELECO_SYSTEMS_APP_ID }}
+#          private_key: ${{ secrets.GH_APP_STEELECO_SYSTEMS_PRIVATE_KEY }}
+      - name: Download and decrypt statefile
+        env:
+          #GITHUB_TOKEN: ${{ steps.generate-app-token.outputs.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          TFSTATE_PGP_KEY: ${{ secrets.TFSTATE_PGP_KEY }}
+        run: |
+          # step script
+          set -x
+          ./scripts/get-state-file.sh
+      - name: Terraform init
+        run: terraform init
+      - name: Terraform plan
+        run: terraform plan | tee >(ansi2txt > terraform.tfplan.log)
+      - name: Create release body
+        run: |
+          cat \
+            <(echo "<details><summary>Terraform Plan Log</summary>") \
+            <(echo "") \
+            <(echo '```') \
+            terraform.tfplan.log \
+            <(echo '```') \
+            <(echo "</details>") \
+          > release.md
+      - name: Create or update tag
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          # step script
+          set -x
+          
+          if gh api /repos/:owner/:repo/git/ref/tags/pr/${{ github.event.pull_request.number }}; then
+            gh api --method PATCH /repos/:owner/:repo/git/refs/tags/pr/${{ github.event.pull_request.number }} \
+              -f sha=${{ github.event.pull_request.head.sha }} \
+              -F force=true \
+              | jq .
+          else
+            gh api --method POST /repos/:owner/:repo/git/refs \
+              -f ref=refs/tags/pr/${{ github.event.pull_request.number }} \
+              -f sha=${{ github.event.pull_request.head.sha }} \
+              | jq .
+          fi
+      - name: Create release
+        id: create-release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: release.md
+          prerelease: true
+          files: terraform.tfplan.log
+          tag_name: pr/${{ github.event.pull_request.number }}
+          name: ${{ github.event.pull_request.title }} (#${{ github.event.pull_request.number }})
+          fail_on_unmatched_files: true
+          target_commitish: ${{ github.event.pull_request.head.sha }}
+
+  apply:
+    name: TF Apply
+    if: github.event_name == 'pull_request' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dependencies
+        run: sudo apt-get install -y colorized-logs
+      - name: Checkout repo
+        uses: actions/checkout@v3
+      - name: Generate app token
+        id: generate-app-token
+        uses: tibdex/github-app-token@v1.9.0
+        with:
+          app_id: ${{ vars.GH_APP_STEELECO_SYSTEMS_APP_ID }}
+          private_key: ${{ secrets.GH_APP_STEELECO_SYSTEMS_PRIVATE_KEY }}
+      - name: Download and decrypt statefile
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          TFSTATE_PGP_KEY: ${{ secrets.TFSTATE_PGP_KEY }}
+        run: |
+          # step script
+          set -x
+          ./scripts/get-state-file.sh
+      - name: Terraform init
+        run: terraform init
+      - name: Terraform apply
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-app-token.outputs.token }}
+        run: terraform appy -auto-approve | tee >(ansi2txt > terraform.apply.log)
+      - name: Encrypt statefile
+        run: |
+          # step script
+          set -x
+          gpg --encrypt --default-recipient "141457414+steeleco-systems[bot]@users.noreply.github.com" \
+            --output terraform.tfstate.gpg terraform.tfstate
+          gpg --encrypt --default-recipient "141457414+steeleco-systems[bot]@users.noreply.github.com" \
+            --output terraform.tfstate.backup.gpg terraform.tfstate.backup
+      - name: Create release body
+        run: |
+          cat \
+            <(echo "<details><summary>Terraform Apply Log</summary>") \
+            <(echo "") \
+            <(echo '```') \
+            terraform.apply.log \
+            <(echo '```') \
+            <(echo "</details>") \
+          > release.md
+      - name: Create or update tag
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          # step script
+          set -x
+          
+          gh api --method PATCH /repos/:owner/:repo/git/refs/tags/pr/${{ github.event.pull_request.number }} \
+            -f sha=${{ github.event.pull_request.merge_commit_sha }} \
+            -F force=true \
+            | jq .
+      - name: Create release
+        id: create-release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: release.md
+          prerelease: false
+          files: |
+            terraform.apply.log
+            terraform.tfstate.gpg
+            terraform.tfstate.backup.gpg
+          tag_name: pr/${{ github.event.pull_request.number }}
+          name: ${{ github.event.pull_request.title }} (#${{ github.event.pull_request.number }})
+          fail_on_unmatched_files: true
+          target_commitish: ${{ github.event.pull_request.merge_commit_sha }}
