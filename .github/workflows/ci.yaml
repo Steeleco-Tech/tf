@@ -97,10 +97,13 @@ jobs:
         with:
           app_id: ${{ vars.GH_APP_STEELECO_SYSTEMS_APP_ID }}
           private_key: ${{ secrets.GH_APP_STEELECO_SYSTEMS_PRIVATE_KEY }}
+      - name: Import PGP key
+        env:
+          TFSTATE_PGP_KEY: ${{ secrets.TFSTATE_PGP_KEY }}
+        run: gpg --import <<< "$TFSTATE_PGP_KEY"
       - name: Download and decrypt statefile
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          TFSTATE_PGP_KEY: ${{ secrets.TFSTATE_PGP_KEY }}
         run: |
           # step script
           set -x

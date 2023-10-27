@@ -18,7 +18,6 @@ if [[ $rc != 0 ]]; then
   fi
 fi
 
-gpg --import <<< "$TFSTATE_PGP_KEY"
 gh api -H 'Accept: application/octet-stream' "$state_file_url" | gpg --out terraform.tfstate --decrypt
 
 
