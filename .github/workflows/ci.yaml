@@ -48,10 +48,7 @@ jobs:
       - name: Download and decrypt statefile
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          # step script
-          set -x
-          ./scripts/get-state-file.sh
+        run: ./scripts/get-state-file.sh
       - name: Terraform init
         run: terraform init
       - name: Generate app token
@@ -63,10 +60,7 @@ jobs:
       - name: Terraform plan
         env:
           GITHUB_TOKEN: ${{ steps.generate-app-token.outputs.token }}
-        run: |
-          # step script
-          set -x
-          terraform plan -var-file=secrets.tfvars | tee >(ansi2txt > terraform.tfplan.log)
+        run: terraform plan -var-file=secrets.tfvars | tee >(ansi2txt > terraform.tfplan.log)
       - name: Create release body
         run: |
           cat \
@@ -123,10 +117,7 @@ jobs:
       - name: Download and decrypt statefile
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          # step script
-          set -x
-          ./scripts/get-state-file.sh
+        run: ./scripts/get-state-file.sh
       - name: Terraform init
         run: terraform init
       - name: Generate app token
@@ -138,7 +129,7 @@ jobs:
       - name: Terraform apply
         env:
           GITHUB_TOKEN: ${{ steps.generate-app-token.outputs.token }}
-        run: terraform apply -auto-approve | tee >(ansi2txt > terraform.apply.log)
+        run: terraform apply -var-file=secrets.tfvars -auto-approve | tee >(ansi2txt > terraform.apply.log)
       - name: Encrypt statefile
         run: |
           # step script
