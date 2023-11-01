@@ -11,6 +11,10 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
 permissions:
   contents: write
+
+defaults:
+  run:
+    shell: bash
 jobs:
   cleanup:
     name: Clean Up
@@ -48,7 +52,6 @@ jobs:
           # step script
           set -x
           ./scripts/get-state-file.sh
-          ls -al
       - name: Terraform init
         run: terraform init
       - name: Generate app token
@@ -60,7 +63,10 @@ jobs:
       - name: Terraform plan
         env:
           GITHUB_TOKEN: ${{ steps.generate-app-token.outputs.token }}
-        run: terraform plan | tee >(ansi2txt > terraform.tfplan.log)
+        run: |
+          # step script
+          set -x
+          terraform plan -var-file=secrets.tfvars | tee >(ansi2txt > terraform.tfplan.log)
       - name: Create release body
         run: |
           cat \
