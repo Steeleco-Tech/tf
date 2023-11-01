@@ -26,7 +26,7 @@ resource "github_actions_secret" "test_secret" {
 
 resource "github_actions_secret" "test_secret_2" {
   secret_name = "secret_${var.secret_name}"
-  plaintext_value = ""
+  plaintext_value = "asdasd"
   repository = "tf-test"
 }
 
