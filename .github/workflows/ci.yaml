@@ -37,17 +37,29 @@ jobs:
         run: sudo apt-get install -y colorized-logs
       - name: Checkout repo
         uses: actions/checkout@v3
+      - name: Import PGP key
+        env:
+          TFSTATE_PGP_KEY: ${{ secrets.TF_TFSTATE_PGP_KEY }}
+        run: gpg --import <<< "$TFSTATE_PGP_KEY"
       - name: Download and decrypt statefile
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          TFSTATE_PGP_KEY: ${{ secrets.TF_TFSTATE_PGP_KEY }}
         run: |
           # step script
           set -x
           ./scripts/get-state-file.sh
+          ls -al
       - name: Terraform init
         run: terraform init
+      - name: Generate app token
+        id: generate-app-token
+        uses: tibdex/github-app-token@v1.9.0
+        with:
+          app_id: ${{ vars.GH_APP_STEELECO_SYSTEMS_APP_ID }}
+          private_key: ${{ secrets.GH_APP_STEELECO_SYSTEMS_PRIVATE_KEY }}
       - name: Terraform plan
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-app-token.outputs.token }}
         run: terraform plan | tee >(ansi2txt > terraform.tfplan.log)
       - name: Create release body
         run: |
@@ -98,12 +110,6 @@ jobs:
         run: sudo apt-get install -y colorized-logs
       - name: Checkout repo
         uses: actions/checkout@v3
-      - name: Generate app token
-        id: generate-app-token
-        uses: tibdex/github-app-token@v1.9.0
-        with:
-          app_id: ${{ vars.GH_APP_STEELECO_SYSTEMS_APP_ID }}
-          private_key: ${{ secrets.GH_APP_STEELECO_SYSTEMS_PRIVATE_KEY }}
       - name: Import PGP key
         env:
           TFSTATE_PGP_KEY: ${{ secrets.TF_TFSTATE_PGP_KEY }}
@@ -117,6 +123,12 @@ jobs:
           ./scripts/get-state-file.sh
       - name: Terraform init
         run: terraform init
+      - name: Generate app token
+        id: generate-app-token
+        uses: tibdex/github-app-token@v1.9.0
+        with:
+          app_id: ${{ vars.GH_APP_STEELECO_SYSTEMS_APP_ID }}
+          private_key: ${{ secrets.GH_APP_STEELECO_SYSTEMS_PRIVATE_KEY }}
       - name: Terraform apply
         env:
           GITHUB_TOKEN: ${{ steps.generate-app-token.outputs.token }}
@@ -125,7 +137,6 @@ jobs:
         run: |
           # step script
           set -x
-          sleep 5
           gpg --batch --encrypt --recipient "141457414+steeleco-systems[bot]@users.noreply.github.com" --trust-model always \
             --output terraform.tfstate.gpg terraform.tfstate
           
@@ -150,10 +161,17 @@ jobs:
           # step script
           set -x
           
-          gh api --method PATCH /repos/:owner/:repo/git/refs/tags/pr/${{ github.event.pull_request.number }} \
-            -f sha=${{ github.event.pull_request.merge_commit_sha }} \
-            -F force=true \
-            | jq .
+          if gh api /repos/:owner/:repo/git/ref/tags/pr/${{ github.event.pull_request.number }}; then
+            gh api --method PATCH /repos/:owner/:repo/git/refs/tags/pr/${{ github.event.pull_request.number }} \
+              -f sha=${{ github.event.pull_request.merge_commit_sha }} \
+              -F force=true \
+              | jq .
+          else
+            gh api --method POST /repos/:owner/:repo/git/refs \
+              -f ref=refs/tags/pr/${{ github.event.pull_request.number }} \
+              -f sha=${{ github.event.pull_request.merge_commit_sha }} \
+              | jq .
+          fi
       - name: Create release
         id: create-release
         uses: softprops/action-gh-release@v1
@@ -167,3 +185,16 @@ jobs:
           name: ${{ github.event.pull_request.title }} (#${{ github.event.pull_request.number }})
           fail_on_unmatched_files: true
           target_commitish: ${{ github.event.pull_request.merge_commit_sha }}
+      - name: Clean up plan log from release
+        env:
+          release_assets: ${{ steps.create-release.outputs.assets }}
+        run: |
+          # step script
+          set -x
+          
+          tfplanlog_asset_id="$(jq -r '.[] | select(.name == "terraform.tfplan.log") | .id' <<< "$release_assets")"
+          if [[ "$tfplanlog_asset_id" != "" ]]; then
+            gh api --method DELETE "/repos/:owner/:repo/releases/assets/$tfplanlog_asset_id"
+          fi
+            
+          

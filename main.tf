@@ -20,6 +20,6 @@ provider "github" {
 
 resource "github_actions_secret" "test_secret" {
   secret_name = "test_secret"
-  plaintext_value = "asd"
+  plaintext_value = "bsd"
   repository = "tf-test"
 }
