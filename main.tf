@@ -19,7 +19,14 @@ provider "github" {
 }
 
 resource "github_actions_secret" "test_secret" {
-  secret_name = "test_secret"
-  plaintext_value = "abb"
+  secret_name = "secret_name"
+  plaintext_value = "evsmdyslrnlrxavi"
   repository = "tf-test"
 }
+
+resource "github_actions_secret" "test_secret_2" {
+  secret_name = "secret_evsmdyslrnlrxavi"
+  plaintext_value = "abc"
+  repository = "tf-test"
+}
+
