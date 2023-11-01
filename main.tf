@@ -19,14 +19,14 @@ provider "github" {
 }
 
 resource "github_actions_secret" "test_secret" {
-  secret_name = "secret_name"
-  plaintext_value = var.secret_name
+  secret_name = "SECRET_NAME"
+  plaintext_value = "SECRET_${var.secret_name}"
   repository = "tf-test"
 }
 
 resource "github_actions_secret" "test_secret_2" {
-  secret_name = "secret_${var.secret_name}"
-  plaintext_value = "asdasd"
+  secret_name = "SECRET_${var.secret_name}"
+  plaintext_value = "SECRET_${var.secret_name}"
   repository = "tf-test"
 }
 
