@@ -187,11 +187,11 @@ jobs:
           target_commitish: ${{ github.event.pull_request.merge_commit_sha }}
       - name: Clean up plan log from release
         env:
-          release_assets: ${{ steps.create-release.outputs.assets }}
+          release_id: ${{ steps.create-release.outputs.id }}
         run: |
           # step script
           set -x
-          
+          release_assets="$(gh api "/repos/:owner/:repo/releases/$release_id" --jq .assets)"
           tfplanlog_asset_id="$(jq -r '.[] | select(.name == "terraform.tfplan.log") | .id' <<< "$release_assets")"
           if [[ "$tfplanlog_asset_id" != "" ]]; then
             gh api --method DELETE "/repos/:owner/:repo/releases/assets/$tfplanlog_asset_id"
