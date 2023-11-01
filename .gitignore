@@ -2,6 +2,7 @@ terraform.tfstate
 terraform.tfstate.backup
 terraform.tfplan
 terraform.tfplan.log
+terraform.apply.log
 .terraform.lock.hcl
 .terraform
 *.gpg

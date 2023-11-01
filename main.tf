@@ -18,12 +18,6 @@ provider "github" {
   owner = "SteelecoSystems"
 }
 
-resource "github_actions_variable" "test_variable" {
-  variable_name = "test_variable"
-  value = "hello world"
-  repository = "tf-test"
-}
-
 resource "github_actions_secret" "test_secret" {
   secret_name = "test_secret"
   plaintext_value = "asd"

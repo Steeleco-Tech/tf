@@ -1,7 +1,5 @@
 name: CI
 on:
-#  push:
-#    branches: [main]
   pull_request:
     types:
       - opened
@@ -10,30 +8,39 @@ on:
       - closed
 concurrency:
   group: ${{ github.workflow}}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
 permissions:
   contents: write
 jobs:
+  cleanup:
+    name: Clean Up
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == false
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - name: Delete release
+        run: |
+          # step script
+          set -x
+          release_id="$(gh api "/repos/$GITHUB_REPOSITORY/releases/tags/pr/${{ github.event.pull_request.number }}" --jq .id)"
+          gh api --method DELETE "/repos/$GITHUB_REPOSITORY/releases/$release_id"
+      - name: Delete tag
+        run: gh api --method DELETE "/repos/$GITHUB_REPOSITORY/git/refs/tags/pr/${{ github.event.pull_request.number }}"
+
   plan:
     name: TF Plan
-    if: github.event_name == 'pull_request' && github.event.pull_request.merged == false
+    if: github.event_name == 'pull_request' && github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
       - name: Dependencies
         run: sudo apt-get install -y colorized-logs
       - name: Checkout repo
         uses: actions/checkout@v3
-#      - name: Generate app token
-#        id: generate-app-token
-#        uses: tibdex/github-app-token@v1.9.0
-#        with:
-#          app_id: ${{ vars.GH_APP_STEELECO_SYSTEMS_APP_ID }}
-#          private_key: ${{ secrets.GH_APP_STEELECO_SYSTEMS_PRIVATE_KEY }}
       - name: Download and decrypt statefile
         env:
-          #GITHUB_TOKEN: ${{ steps.generate-app-token.outputs.token }}
           GITHUB_TOKEN: ${{ github.token }}
-          TFSTATE_PGP_KEY: ${{ secrets.TFSTATE_PGP_KEY }}
+          TFSTATE_PGP_KEY: ${{ secrets.TF_TFSTATE_PGP_KEY }}
         run: |
           # step script
           set -x
@@ -99,7 +106,7 @@ jobs:
           private_key: ${{ secrets.GH_APP_STEELECO_SYSTEMS_PRIVATE_KEY }}
       - name: Import PGP key
         env:
-          TFSTATE_PGP_KEY: ${{ secrets.TFSTATE_PGP_KEY }}
+          TFSTATE_PGP_KEY: ${{ secrets.TF_TFSTATE_PGP_KEY }}
         run: gpg --import <<< "$TFSTATE_PGP_KEY"
       - name: Download and decrypt statefile
         env:
@@ -118,10 +125,14 @@ jobs:
         run: |
           # step script
           set -x
-          gpg --batch --encrypt --default-recipient "141457414+steeleco-systems[bot]@users.noreply.github.com" \
+          sleep 5
+          gpg --batch --encrypt --recipient "141457414+steeleco-systems[bot]@users.noreply.github.com" --trust-model always \
             --output terraform.tfstate.gpg terraform.tfstate
-          gpg --batch --encrypt --default-recipient "141457414+steeleco-systems[bot]@users.noreply.github.com" \
-            --output terraform.tfstate.backup.gpg terraform.tfstate.backup
+          
+          if [ -f terraform.tfstate.backup ]; then
+            gpg --batch --encrypt --recipient "141457414+steeleco-systems[bot]@users.noreply.github.com" --trust-model always \
+              --output terraform.tfstate.backup.gpg terraform.tfstate.backup
+          fi
       - name: Create release body
         run: |
           cat \
@@ -151,8 +162,7 @@ jobs:
           prerelease: false
           files: |
             terraform.apply.log
-            terraform.tfstate.gpg
-            terraform.tfstate.backup.gpg
+            terraform.tfstate*.gpg
           tag_name: pr/${{ github.event.pull_request.number }}
           name: ${{ github.event.pull_request.title }} (#${{ github.event.pull_request.number }})
           fail_on_unmatched_files: true
