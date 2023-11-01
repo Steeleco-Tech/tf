@@ -188,6 +188,7 @@ jobs:
       - name: Clean up plan log from release
         env:
           release_id: ${{ steps.create-release.outputs.id }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           # step script
           set -x
